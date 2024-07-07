@@ -702,7 +702,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         super().__init__(client_uid, websocket)
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
-            "medium", "medium.en", "large-v2", "large-v3",
+            "medium", "medium.en", "large-v2", "large-v3", "distil-medium.en", "distil-small.en",
         ]
         if not os.path.exists(model):
             self.model_size_or_path = self.check_valid_model(model)
