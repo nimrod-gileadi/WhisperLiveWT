@@ -1,5 +1,5 @@
 import argparse
-from whisper_live.server import TranscriptionServer
+from whisper_live.simple_server import TranscriptionServer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

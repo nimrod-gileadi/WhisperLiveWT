@@ -3,7 +3,7 @@
 import numpy as np
 
 class SimpleVoiceActivityDetector:
-    def __init__(self, threshold: float = 0):
+    def __init__(self, threshold: float = 0.0002):
         """
         Initializes the SimpleVoiceActivityDetector.
         """
@@ -23,5 +23,4 @@ class SimpleVoiceActivityDetector:
                   False otherwise.
         """
         power = np.dot(audio_frame, audio_frame) / audio_frame.flatten().shape[0]
-        print('audio power:', power)
         return power > self.threshold
