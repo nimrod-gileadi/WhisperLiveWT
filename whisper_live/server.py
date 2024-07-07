@@ -8,7 +8,7 @@ import torch
 import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
-from whisper_live.vad import VoiceActivityDetector
+from whisper_live.simple_vad import SimpleVoiceActivityDetector
 from whisper_live.transcriber import WhisperModel
 try:
     from whisper_live.transcriber_tensorrt import WhisperTRTLLM
@@ -200,7 +200,7 @@ class TranscriptionServer:
                 return False  # Indicates that the connection should not continue
 
             if self.backend == "tensorrt" or self.use_vad:
-                self.vad_detector = VoiceActivityDetector(frame_rate=self.RATE)
+                self.vad_detector = SimpleVoiceActivityDetector()
             self.initialize_client(websocket, options, faster_whisper_custom_model_path,
                                    whisper_tensorrt_path, trt_multilingual)
             return True
