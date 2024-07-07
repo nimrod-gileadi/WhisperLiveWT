@@ -10,6 +10,7 @@ p = Usb(0x0416, 0x5011, in_ep=0x81, out_ep=0x01, profile="POS-5890")
 p.set(font='a', custom_size=True, width=1, height=2, flip=False)
 
 def print_label(text):
+    text = text.strip()
     print(text)
     p.textln(text + '\n\n')
 

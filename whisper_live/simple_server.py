@@ -14,6 +14,8 @@ from whisper_live.transcriber import WhisperModel
 
 logging.basicConfig(level=logging.INFO)
 
+# Maximum number of seconds to transcribe in one go.
+_BUFFER_SIZE = 60
 
 class ClientManager:
     def __init__(self, max_clients=4, max_connection_time=600):
@@ -336,7 +338,6 @@ class ServeClientBase(object):
         self.frames_queue = queue.Queue()
         self.frames_np = None
         self.frames_offset = 0.0
-        self.text = []
         self.current_out = ''
         self.prev_out = ''
         self.t_start = None
@@ -382,7 +383,15 @@ class ServeClientBase(object):
         if self.frames_np is None:
             self.frames_np = frame_np.copy()
         else:
-            self.frames_np = np.concatenate((self.frames_np, frame_np), axis=0)
+            # Don't transcribe audio longer than buffer size
+            time_to_remove = max(
+                    0, self.frames_np.shape[0] + frame_np.shape[0] - _BUFFER_SIZE*self.RATE)
+            if time_to_remove > 0:
+                logging.info('Buffer full. Removing %d frames', time_to_remove)
+                removed = min(time_to_remove, self.frames_np.shape[0])
+                self.frames_np = self.frames_np[time_to_remove:]
+                time_to_remove -= removed
+            self.frames_np = np.concatenate((self.frames_np, frame_np[time_to_remove:]), axis=0)
         self.lock.release()
 
     def add_eos(self):
@@ -684,7 +693,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         transcript = []
         for i, s in enumerate(segments):
             text_ = s.text
-            self.text.append(text_)
             start, end = s.start, min(duration, s.end)
 
             if start >= end:

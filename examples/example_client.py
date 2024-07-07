@@ -9,7 +9,7 @@ def sample_callback(text, is_final):
   global client
 
   if is_final and text != last_text:
-    print(''.join(text), flush=True)
+    print(''.join(text).strip(), flush=True)
     last_text = text
 
 client = TranscriptionClient(
