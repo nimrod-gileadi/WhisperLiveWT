@@ -122,7 +122,7 @@ class TranscriptionServer:
     RATE = 16000
 
     def __init__(self):
-        self.client_manager = ClientManager()
+        self.client_manager = ClientManager(max_connection_time=8*24*3600)
         self.no_voice_activity_chunks = 0
         self.use_vad = True
 
