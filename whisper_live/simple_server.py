@@ -383,7 +383,6 @@ class ServeClientBase(object):
             self.frames_np = frame_np.copy()
         else:
             self.frames_np = np.concatenate((self.frames_np, frame_np), axis=0)
-        logging.info('frames: %s', self.frames_np.shape[0] / self.RATE)
         self.lock.release()
 
     def add_eos(self):
