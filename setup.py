@@ -55,6 +55,7 @@ setup(
         "openai-whisper",
         "kaldialign",
         "soundfile",
+        "numpy<2",
     ],
     python_requires=">=3.8"
 )
