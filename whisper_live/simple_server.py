@@ -428,6 +428,8 @@ class ServeClientBase(object):
 
         input_bytes = np.concatenate(chunks, axis=0)
         duration = self.get_audio_chunk_duration(input_bytes)
+        logging.info("End of speech detected. Processing %d chunks of duration %f.",
+                     len(chunks), duration)
         return input_bytes, duration, len(chunks)
 
     def prepare_segments(self, last_segment=None):
@@ -476,6 +478,7 @@ class ServeClientBase(object):
                 json.dumps({
                     "uid": self.client_uid,
                     "segments": segments,
+                    "is_final": True,
                 })
             )
         except Exception as e:
@@ -623,16 +626,13 @@ class ServeClientFasterWhisper(ServeClientBase):
             depends on the implementation of the `transcriber.transcribe` method but typically
             includes the transcribed text.
         """
-        if not self.use_vad:
-            result, info = self.transcriber.transcribe(
-                input_sample,
-                initial_prompt=self.initial_prompt,
-                language=self.language,
-                task=self.task,
-                vad_filter=self.use_vad,
-                vad_parameters=self.vad_parameters if self.use_vad else None)
-        else:
-            result = info = None
+        result, info = self.transcriber.transcribe(
+            input_sample,
+            initial_prompt=self.initial_prompt,
+            language=self.language,
+            task=self.task,
+            vad_filter=self.use_vad,
+            vad_parameters=self.vad_parameters if self.use_vad else None)
 
         if self.language is None and info is not None:
             self.set_language(info)
@@ -708,6 +708,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             # TODO(nimrod): Don't transcribe very short things.
             try:
                 result = self.transcribe_audio(input_sample)
+                logging.info("Transcription result: %s", result)
 
                 if result is None or self.language is None:
                     continue
