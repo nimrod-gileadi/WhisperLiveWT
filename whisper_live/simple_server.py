@@ -315,6 +315,7 @@ class TranscriptionServer:
 
 # Sentinel value to indicate end of speech in the queue.
 _EOS_TOKEN = object()
+_MAX_TRANSCRIPTION_DURATION = 45.0
 
 class ServeClientBase(object):
     RATE = 16000
@@ -331,7 +332,6 @@ class ServeClientBase(object):
         self.text = []
         self.current_out = ''
         self.prev_out = ''
-        self.t_start = None
         self.exit = False
         self.same_output_threshold = 0
         self.show_prev_out_thresh = 5   # if pause(no output from whisper) show previous output for 5 seconds
@@ -403,36 +403,24 @@ class ServeClientBase(object):
                 - chunks (int), number of audio chunks from the queue
         """
         chunks = []
+        length = 0
         while (chunk := self._queue.get()) is _EOS_TOKEN:
             pass
         chunks.append(chunk)
+        length += chunk.shape[0]
         while (chunk := self._queue.get()) is not _EOS_TOKEN:
             chunks.append(chunk)
+            length += chunk.shape[0]
+            # Remove chunks from the start to limit the length of time sent for transcription.
+            while chunks and (length - chunks[0].shape[0]) / self.RATE > _MAX_TRANSCRIPTION_DURATION:
+                length -= chunk.shape[0]
+                del chunks[0]
 
         input_bytes = np.concatenate(chunks, axis=0)
         duration = self.get_audio_chunk_duration(input_bytes)
         logging.info("End of speech detected. Processing %d chunks of duration %f.",
                      len(chunks), duration)
         return input_bytes, duration, len(chunks)
-
-    def prepare_segments(self, last_segment=None):
-        """
-        Prepares the segments of transcribed text to be sent to the client.
-
-        This method compiles the recent segments of transcribed text, ensuring that only the
-        specified number of the most recent segments are included. It also appends the most
-        recent segment of text if provided (which is considered incomplete because of the possibility
-        of the last word being truncated in the audio chunk).
-
-        Returns:
-            list: A list of transcribed text segments to be sent to the client.
-        """
-        segments = []
-        if len(self.transcript) >= self.send_last_n_segments:
-            segments = self.transcript[-self.send_last_n_segments:].copy()
-        else:
-            segments = self.transcript.copy()
-        return segments
 
     def get_audio_chunk_duration(self, input_bytes):
         """
@@ -621,33 +609,6 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.set_language(info)
         return result
 
-    def get_previous_output(self):
-        """
-        Retrieves previously generated transcription outputs if no new transcription is available
-        from the current audio chunks.
-
-        Checks the time since the last transcription output and, if it is within a specified
-        threshold, returns the most recent segments of transcribed text. It also manages
-        adding a pause (blank segment) to indicate a significant gap in speech based on a defined
-        threshold.
-
-        Returns:
-            segments (list): A list of transcription segments. This may include the most recent
-                            transcribed text segments or a blank segment to indicate a pause
-                            in speech.
-        """
-        segments = []
-        if self.t_start is None:
-            self.t_start = time.time()
-        if time.time() - self.t_start < self.show_prev_out_thresh:
-            segments = self.prepare_segments()
-
-        # add a blank if there is no speech for 3 seconds
-        if len(self.text) and self.text[-1] != '':
-            if time.time() - self.t_start > self.add_pause_thresh:
-                self.text.append('')
-        return segments
-
     def handle_transcription_output(self, result, duration):
         """
         Handle the transcription output, updating the transcript and sending data to the client.
@@ -656,12 +617,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             result (str): The result from whisper inference i.e. the list of segments.
             duration (float): Duration of the transcribed audio chunk.
         """
-        segments = []
-        if len(result):
-            self.t_start = None
-            self.update_segments(result, duration)
-            segments = self.prepare_segments()
-
+        segments = self.create_segments(result, duration)
         if len(segments):
             self.send_transcription_to_client(segments)
 
@@ -720,7 +676,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             'text': text
         }
 
-    def update_segments(self, segments, duration):
+    def create_segments(self, segments, duration):
         """
         Processes the segments from whisper. Appends all the segments to the list
         including the last segment.
@@ -734,18 +690,19 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         offset = None
         self.current_out = ''
+        transcript = []
         # process complete segments
-        if len(segments):
-            for i, s in enumerate(segments):
-                text_ = s.text
-                self.text.append(text_)
-                start, end = self.timestamp_offset + s.start, self.timestamp_offset + min(duration, s.end)
+        for i, s in enumerate(segments):
+            text_ = s.text
+            self.text.append(text_)
+            start, end = self.timestamp_offset + s.start, self.timestamp_offset + min(duration, s.end)
 
-                if start >= end:
-                    continue
-                if s.no_speech_prob > self.no_speech_thresh:
-                    continue
+            if start >= end:
+                continue
+            if s.no_speech_prob > self.no_speech_thresh:
+                continue
 
-                self.transcript.append(self.format_segment(start, end, text_))
-                offset = min(duration, s.end)
+            transcript.append(self.format_segment(start, end, text_))
+            offset = min(duration, s.end)
+        return transcript
 
