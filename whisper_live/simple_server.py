@@ -371,23 +371,6 @@ class ServeClientBase(object):
 
         """
         self._queue.put(frame_np)
-        if True:
-            return
-        # TODO(nimrod): Delete the following code once the logic is in the processor thread.
-        self.lock.acquire()
-        if self.frames_np is not None and self.frames_np.shape[0] > 45*self.RATE:
-            self.frames_offset += 30.0
-            self.frames_np = self.frames_np[int(30*self.RATE):]
-            # check timestamp offset(should be >= self.frame_offset)
-            # this basically means that there is no speech as timestamp offset hasnt updated
-            # and is less than frame_offset
-            if self.timestamp_offset < self.frames_offset:
-                self.timestamp_offset = self.frames_offset
-        if self.frames_np is None:
-            self.frames_np = frame_np.copy()
-        else:
-            self.frames_np = np.concatenate((self.frames_np, frame_np), axis=0)
-        self.lock.release()
 
     def append_eos(self):
         """Adds an end-of-speech token to the processing buffer, to trigger transcription.
